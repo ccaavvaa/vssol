@@ -57,12 +57,13 @@ namespace MG
                 var keyFolders = SystemFolders[key];
                 var files = new List<string>();
                 this.SystemFiles[key] = files;
-                keyFolders.Select(f => Directory.EnumerateFiles(Path.Combine(Root, f), "*", SearchOption.AllDirectories))
+                keyFolders.Where(f => Directory.Exists(Path.Combine(Root, f)))
+                    .Select(f => Directory.EnumerateFiles(Path.Combine(Root, f), "*", SearchOption.AllDirectories))
                     .ToList()
                     .ForEach(i =>
                     {
                         files.AddRange(i);
-                        });
+                    });
             }
         }
 
@@ -82,9 +83,9 @@ namespace MG
             var prefixes = SystemFolders[target].Select(f => Path.Combine(Root, f)).ToList();
             foreach (var file in filesToCopy)
             {
-                foreach(var prefix in prefixes)
+                foreach (var prefix in prefixes)
                 {
-                    if(file.StartsWith(prefix))
+                    if (file.StartsWith(prefix))
                     {
                         string dir = Path.GetDirectoryName(file);
                         string relativeDir = dir.Length > prefix.Length ? dir.Substring(prefix.Length) : String.Empty;
@@ -146,6 +147,7 @@ namespace MG
         Framework,
         Project,
         Runtime,
+        Web,
     }
 
     public class MGReference
@@ -157,7 +159,8 @@ namespace MG
 
         public void Parse(XElement referenceElement)
         {
-            Name = referenceElement.Attribute("nom").Value;
+            var nameAtt = referenceElement.Attribute("nom");
+            if (nameAtt != null) Name = nameAtt.Value;
             string type = referenceElement.Attribute("type").Value;
             switch (type)
             {
@@ -171,6 +174,10 @@ namespace MG
                     Type = MGReferenceType.Runtime;
                     Composant = referenceElement.Attribute("composant").Value;
                     Version = referenceElement.Attribute("version").Value;
+                    break;
+                case "web":
+                    Type = MGReferenceType.Web;
+                    Name = referenceElement.Attribute("wsdl").Value;
                     break;
                 default:
                     throw new NotImplementedException(String.Concat("Reference type: ", type));
@@ -194,12 +201,14 @@ namespace MG
         public MGTarget OutputTarget { get; private set; }
         public List<string> Sources { get; private set; }
         public List<MGReference> References { get; private set; }
+        public string RootNamespace { get; private set; }
 
         public void Parse(XElement projectElement)
         {
-            this.Root = projectElement.Attribute("code").Value;
-            this.Name = projectElement.Attribute("rootnamespace").Value;
+            this.Root = projectElement.Attribute("code").Value.Replace("/", "\\");
             this.Output = GetProjectAttribute(projectElement, "output");
+            this.Name = Path.GetFileNameWithoutExtension(this.Output);
+            this.RootNamespace = projectElement.Attribute("rootnamespace").Value;
 
             this.SetOutputType(projectElement);
             this.SetTarget(projectElement);
@@ -221,7 +230,7 @@ namespace MG
             var sourceElement = projectElement.Descendants("sources")
                 .Single();
             this.Sources = sourceElement.Descendants("include")
-                .Select(i => i.Attribute("nom").Value)
+                .Select(i => i.Attribute("nom").Value.Replace("/", "\\"))
                 .ToList();
         }
 

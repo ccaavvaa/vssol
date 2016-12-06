@@ -1,4 +1,5 @@
-﻿using System;
+﻿using MG;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -9,10 +10,28 @@ namespace VSIXProject1
 {
     public class BuilderParameters
     {
-        public string SolutionFolder { get; set; }
+        public string WorkingRoot { get; set; }
+
         public string SolutionName { get; set; }
 
-        public ProjectParam[] Projects { get; set; }
+        public string ServerOutput { get; set; }
+
+        public string ClientOutput { get; set; }
+        public string ComposantFile { get; set; }
+
+        public string WorkingDir { get { return Path.Combine(this.WorkingRoot, this.Composant.Name); } }
+        public MGComposant Composant { get; set; }
+        public void Parse()
+        {
+            MGComposant composant = new MGComposant(this.ComposantFile);
+            composant.Destination[MGTarget.Client] = this.ClientOutput;
+            composant.Destination[MGTarget.Server] = this.ServerOutput;
+            composant.Parse();
+            composant.FillSystemFiles();
+            composant.CopySystemFiles();
+            this.SolutionName = composant.Name;
+            this.Composant = composant;
+        }
     }
 
     public class ProjectParam

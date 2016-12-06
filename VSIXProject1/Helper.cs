@@ -95,8 +95,8 @@ namespace VSIXProject1
                 }
             }
 
-            Directory.EnumerateDirectories(path).ForEach(d => Directory.Delete(d, true));
-            Directory.EnumerateFiles(path).ForEach(f => File.Delete(f));
+            Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories).ForEach(f => File.Delete(f));
+            Directory.EnumerateDirectories(path, "*", SearchOption.AllDirectories).ForEach(d => Directory.Delete(d, true));
             return true;
         }
 

@@ -9,6 +9,7 @@ using EnvDTE100;
 using System.Runtime.Versioning;
 using VSLangProj110;
 using System.IO;
+using MG;
 
 namespace VSIXProject1
 {
@@ -22,15 +23,28 @@ namespace VSIXProject1
         }
         public void Execute()
         {
+            foreach (var composantFile in new string[]
+            {
+                //@"C:\tmp\Gizeh\N00-Redist\N00-Redist.xml",
+                @"C:\tmp\Gizeh\N01-AGL\N01-AGL.xml",
+            })
+            {
+                this.CreateComposantSolution(composantFile);
+            }
+        }
+
+        private void CreateComposantSolution(string composantFile)
+        {
+
             var parameters = new BuilderParameters
             {
-                SolutionFolder = @"c:\tmp\working",
-                SolutionName = "Working",
-                Projects = new ProjectParam[]
-                {
-                    new ProjectParam(@"C:\tmp\MySolution\ClassLibrary1") {Name = "x",}
-                },
+                WorkingRoot = @"c:\tmp\working",
+                ClientOutput = @"c:\tmp\working\Debug\Client",
+                ServerOutput = @"c:\tmp\working\Debug\Server",
+                ComposantFile = composantFile,
             };
+
+            parameters.Parse();
 
             var _dte = ServiceProvider.GetService(typeof(DTE)) as DTE;
             var solution = (Solution4)_dte.Solution;
@@ -39,22 +53,24 @@ namespace VSIXProject1
                 bool doSave = Helper.Ask("Save solution {0} ?", solution.FullName);
                 solution.Close(doSave);
             }
-            if (!Helper.EmptyFolder(parameters.SolutionFolder, true))
+
+            if (!Helper.EmptyFolder(parameters.WorkingDir, true))
             {
                 return;
             }
-            solution.Create(parameters.SolutionFolder, parameters.SolutionName);
+            solution.Create(parameters.WorkingDir, parameters.SolutionName);
 
-            foreach (var p in parameters.Projects)
+            foreach (var p in parameters.Composant.Projects)
             {
                 CreateProject(parameters, solution, p);
             }
+            solution.Close(true);
         }
 
-        private void CreateProject(BuilderParameters parameters, Solution4 solution, ProjectParam p)
+        private void CreateProject(BuilderParameters parameters, Solution4 solution, MGProject p)
         {
             string template = solution.GetProjectTemplate("Microsoft.CSharp.ClassLibrary", "CSharp");
-            solution.AddFromTemplate(template, Path.Combine(parameters.SolutionFolder, p.Name), p.Name, false);
+            solution.AddFromTemplate(template, Path.Combine(parameters.WorkingDir, p.Root, p.Name), p.Name, false);
 
             var solutionProjects = Helper.GetSolutionProjects(solution);
             var project = solutionProjects.FirstOrDefault(i => i.Name == p.Name);
@@ -65,20 +81,52 @@ namespace VSIXProject1
             project = solutionProjects.FirstOrDefault(i => i.Name == p.Name);
             CleanProject(project);
             AddFiles(parameters, project, p);
+            project.Save();
         }
 
-        private void AddFiles(BuilderParameters parameters, Project project, ProjectParam para)
+        private void AddFiles(BuilderParameters parameters, Project project, MGProject mgproj)
         {
-            foreach(var file in para.Files)
+            foreach (var file in mgproj.Sources)
             {
-                project.ProjectItems.AddFromFileCopy(file);
+                string fileName = Path.GetFileName(file);
+                string fullName = Path.Combine(parameters.Composant.Root, mgproj.Root, file);
+                if(!File.Exists(fullName))
+                {
+                    continue;
+                }
+                string secondExtension = Path.GetExtension(Path.GetFileNameWithoutExtension(fileName));
+                if (!String.IsNullOrEmpty(secondExtension) && secondExtension.ToLower() == ".designer")
+                {
+                    continue;
+                }
+                var elements = file.Split('\\', '/');
+                ProjectItems projectItems;
+                projectItems = elements.Length > 1 ?
+                    CreateFolders(project.ProjectItems, elements.Take(elements.Length - 1)) :
+                    project.ProjectItems;
+
+                projectItems.AddFromFileCopy(fullName);
             }
+        }
+
+        private ProjectItems CreateFolders(ProjectItems items, IEnumerable<string> folders)
+        {
+            foreach (var folder in folders)
+            {
+                var item = Helper.GetEnumerable<ProjectItem>(items).Where(i => i.Name == folder).FirstOrDefault();
+                if (item == null)
+                {
+                    item = items.AddFolder(folder);
+                }
+                items = item.ProjectItems;
+            }
+            return items;
         }
 
         private static void SetTargetFramework(Project project)
         {
-                //CSharpProjectProperties6 properties = project.Properties as CSharpProjectProperties6;
-                //properties.TargetFrameworkMoniker = new FrameworkName(".NETFramework", new Version(4, 6)).FullName;
+            //CSharpProjectProperties6 properties = project.Properties as CSharpProjectProperties6;
+            //properties.TargetFrameworkMoniker = new FrameworkName(".NETFramework", new Version(4, 6)).FullName;
         }
 
         //_dte.Solution.Close(true);
