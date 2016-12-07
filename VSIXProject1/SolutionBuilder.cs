@@ -26,8 +26,8 @@ namespace VSIXProject1
             foreach (var composantFile in new string[]
             {
                 //@"C:\tmp\Gizeh\N00-Redist\N00-Redist.xml",
-                @"C:\tmp\Gizeh\N20-Lanceur\N20-Lanceur.xml",
-                //@"C:\tmp\Gizeh\N01-AGL\N01-AGL.xml",
+                //@"C:\tmp\Gizeh\N20-Lanceur\N20-Lanceur.xml",
+                @"C:\tmp\Gizeh\N01-AGL\N01-AGL.xml",
             })
             {
                 this.CreateComposantSolution(composantFile);
@@ -148,7 +148,14 @@ copy / y ""$(TargetDir)$(TargetName).pdb"" ""{0}""
                     Path.Combine(parameters.ServerOutput, "bin");
 
                 path = Path.Combine(path, aref.Name);
-                references.Add(path);
+                if (File.Exists(path))
+                {
+                    references.Add(path);
+                }
+                else
+                {
+                    //
+                }
             }
         }
 
