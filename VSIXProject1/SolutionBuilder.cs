@@ -80,8 +80,20 @@ namespace VSIXProject1
             }
             project = solutionProjects.FirstOrDefault(i => i.Name == p.Name);
             CleanProject(project);
+            AddReferences(parameters, project, p);
             AddFiles(parameters, project, p);
             project.Save();
+        }
+
+        private void AddReferences(BuilderParameters parameters, Project project, MGProject mgprj)
+        {
+            var references = (project.Object as VSProject).References;
+            var mgFramworkRef = mgprj.References
+                .Where(r => r.Type == MGReferenceType.Framework);
+            foreach(var fref in mgFramworkRef)
+            {
+                references.Add(fref.Name);
+            }
         }
 
         private void AddFiles(BuilderParameters parameters, Project project, MGProject mgproj)
@@ -125,8 +137,7 @@ namespace VSIXProject1
 
         private static void SetTargetFramework(Project project)
         {
-            //CSharpProjectProperties6 properties = project.Properties as CSharpProjectProperties6;
-            //properties.TargetFrameworkMoniker = new FrameworkName(".NETFramework", new Version(4, 6)).FullName;
+            project.Properties.Item("TargetFrameworkMoniker").Value = new FrameworkName(".NETFramework", new Version(4, 6)).FullName;
         }
 
         //_dte.Solution.Close(true);
