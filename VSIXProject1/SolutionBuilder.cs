@@ -25,8 +25,8 @@ namespace VSIXProject1
         {
             foreach (var composantFile in new string[]
             {
-                //@"C:\tmp\Gizeh\N00-Redist\N00-Redist.xml",
-                @"C:\tmp\Gizeh\N01-AGL\N01-AGL.xml",
+                @"C:\tmp\Gizeh\N00-Redist\N00-Redist.xml",
+                //@"C:\tmp\Gizeh\N01-AGL\N01-AGL.xml",
             })
             {
                 this.CreateComposantSolution(composantFile);
