@@ -139,6 +139,7 @@ namespace MG
         None = 0,
         Client = 1,
         Server = 2,
+        ClientAndServer = 3,
     }
 
     public enum MGReferenceType

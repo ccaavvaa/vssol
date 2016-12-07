@@ -25,7 +25,8 @@ namespace VSIXProject1
         {
             foreach (var composantFile in new string[]
             {
-                @"C:\tmp\Gizeh\N00-Redist\N00-Redist.xml",
+                //@"C:\tmp\Gizeh\N00-Redist\N00-Redist.xml",
+                @"C:\tmp\Gizeh\N20-Lanceur\N20-Lanceur.xml",
                 //@"C:\tmp\Gizeh\N01-AGL\N01-AGL.xml",
             })
             {
@@ -59,6 +60,8 @@ namespace VSIXProject1
                 return;
             }
             solution.Create(parameters.WorkingDir, parameters.SolutionName);
+            //            var solutionConfiguration = solution.SolutionBuild.SolutionConfigurations. .Item("Debug");
+            //            solutionConfiguration.Activate();
 
             foreach (var p in parameters.Composant.Projects)
             {
@@ -80,19 +83,82 @@ namespace VSIXProject1
             }
             project = solutionProjects.FirstOrDefault(i => i.Name == p.Name);
             CleanProject(project);
-            AddReferences(parameters, project, p);
+            AddReferences(parameters, solution, project, p);
             AddFiles(parameters, project, p);
+            SetOutput(parameters, project, p);
             project.Save();
         }
 
-        private void AddReferences(BuilderParameters parameters, Project project, MGProject mgprj)
+        private void SetOutput(BuilderParameters parameters, Project project, MGProject mgprj)
+        {
+            string serverPath = Path.Combine(parameters.ServerOutput, "bin");
+            project.Properties.Item("RootNamespace").Value = mgprj.RootNamespace;
+            project.Properties.Item("AssemblyName").Value = mgprj.Name;
+            project.Properties.Item("OutputType").Value =
+                mgprj.Type == OutputType.Library ?
+                prjOutputType.prjOutputTypeLibrary : prjOutputType.prjOutputTypeWinExe;
+            string path = (mgprj.OutputTarget & MGTarget.Client) == MGTarget.Client ?
+                parameters.ClientOutput :
+                serverPath;
+            var outputPathProp = project.ConfigurationManager.ActiveConfiguration.Properties.Item("OutputPath");
+            outputPathProp.Value = path;
+            if ((mgprj.OutputTarget & MGTarget.ClientAndServer) == MGTarget.ClientAndServer)
+            {
+                project.Properties.Item("PostBuildEvent").Value =
+                    String.Format(
+@"copy /y ""$(TargetPath)"" ""{0}""
+copy / y ""$(TargetDir)$(TargetName).pdb"" ""{0}""
+", serverPath);
+            }
+        }
+
+        private void AddReferences(BuilderParameters parameters, Solution4 solution, Project project, MGProject mgprj)
         {
             var references = (project.Object as VSProject).References;
+            AddFrameworkRefs(mgprj, references);
+            AddRuntimeRefs(parameters, mgprj, references);
+            AddProjectRefs(solution, mgprj, references);
+        }
+
+        private static void AddProjectRefs(Solution4 solution, MGProject mgprj, References references)
+        {
+            var mgProjectRef = mgprj.References
+                .Where(r => r.Type == MGReferenceType.Project);
+            foreach (var aref in mgProjectRef)
+            {
+                var projectName = Path.GetFileNameWithoutExtension(aref.Name);
+                var refprj = Helper.GetEnumerable<Project>(solution.Projects)
+                    .FirstOrDefault(i => String.Compare(i.Name, projectName, StringComparison.InvariantCultureIgnoreCase) == 0);
+                if (refprj == null)
+                {
+                    throw new InvalidOperationException(String.Format("Project {0} not found", projectName));
+                }
+                references.AddProject(refprj);
+            }
+        }
+
+        private static void AddRuntimeRefs(BuilderParameters parameters, MGProject mgprj, References references)
+        {
+            var mgRuntimeRef = mgprj.References
+                .Where(r => r.Type == MGReferenceType.Runtime);
+            foreach (var aref in mgRuntimeRef)
+            {
+                string path = (mgprj.OutputTarget & MGTarget.Client) == MGTarget.Client ?
+                    parameters.ClientOutput :
+                    Path.Combine(parameters.ServerOutput, "bin");
+
+                path = Path.Combine(path, aref.Name);
+                references.Add(path);
+            }
+        }
+
+        private static void AddFrameworkRefs(MGProject mgprj, References references)
+        {
             var mgFramworkRef = mgprj.References
                 .Where(r => r.Type == MGReferenceType.Framework);
-            foreach(var fref in mgFramworkRef)
+            foreach (var aref in mgFramworkRef)
             {
-                references.Add(fref.Name);
+                references.Add(aref.Name);
             }
         }
 
@@ -102,12 +168,15 @@ namespace VSIXProject1
             {
                 string fileName = Path.GetFileName(file);
                 string fullName = Path.Combine(parameters.Composant.Root, mgproj.Root, file);
-                if(!File.Exists(fullName))
+                if (!File.Exists(fullName))
                 {
                     continue;
                 }
                 string secondExtension = Path.GetExtension(Path.GetFileNameWithoutExtension(fileName));
-                if (!String.IsNullOrEmpty(secondExtension) && secondExtension.ToLower() == ".designer")
+                if (!String.IsNullOrEmpty(secondExtension)
+                    && secondExtension.ToLower() == ".designer"
+                    && File.Exists(Path.Combine(Path.GetDirectoryName(fullName),
+                        Path.ChangeExtension(Path.GetFileNameWithoutExtension(fileName), ".cs"))))
                 {
                     continue;
                 }
@@ -117,7 +186,57 @@ namespace VSIXProject1
                     CreateFolders(project.ProjectItems, elements.Take(elements.Length - 1)) :
                     project.ProjectItems;
 
-                projectItems.AddFromFileCopy(fullName);
+                var fileWithoutPath = Path.GetFileName(fullName);
+                var item = Helper.GetEnumerable<ProjectItem>(projectItems)
+                    .FirstOrDefault(i => String.Compare(i.Name, fileWithoutPath, true) == 0);
+                if (item == null)
+                {
+                    projectItems.AddFromFileCopy(fullName);
+                }
+            }
+            AddResources(parameters, project, mgproj);
+        }
+
+        private void AddResources(BuilderParameters parameters, Project project, MGProject mgproj)
+        {
+            string projectSourcePath = Path.Combine(parameters.Composant.Root, mgproj.Root);
+            DirectoryInfo dirInfo = new DirectoryInfo(projectSourcePath);
+            if (!dirInfo.Exists)
+            {
+                return;
+            }
+
+            List<string> excludeExtensions = new List<string>()
+            {
+                ".cs",
+                ".vb",
+                ".xml",
+                ".csproj",
+                ".sln",
+            };
+            var resources = dirInfo.EnumerateFiles("*", SearchOption.AllDirectories)
+                .Where(f => !excludeExtensions.Contains(f.Extension.ToLower()))
+                .Select(f => f.FullName).ToList();
+            foreach (var file in resources)
+            {
+                string fileInProjectPath = file.Substring(dirInfo.FullName.Length);
+                string projectPath = Path.GetDirectoryName(project.FileName);
+                string fileInProject = Path.Combine(projectPath, fileInProjectPath);
+                if (File.Exists(fileInProject))
+                {
+                    continue;
+                }
+                var elements = fileInProjectPath.Split('\\', '/');
+
+                ProjectItems projectItems;
+                projectItems = elements.Length > 1 ?
+                    CreateFolders(project.ProjectItems, elements.Take(elements.Length - 1)) :
+                    project.ProjectItems;
+
+                var fileWithoutPath = Path.GetFileName(file);
+                var item = Helper.GetEnumerable<ProjectItem>(projectItems)
+                    .FirstOrDefault(i => String.Compare(i.Name, fileWithoutPath, true) == 0);
+                projectItems.AddFromFileCopy(file);
             }
         }
 
