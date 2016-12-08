@@ -27,6 +27,8 @@ namespace MG
             }
         }
 
+        public IEnumerable<string> Filter { get; internal set; }
+
         public readonly Dictionary<MGTarget, List<string>> SystemFiles = new Dictionary<MGTarget, List<string>>();
         public readonly Dictionary<MGTarget, string> Destination = new Dictionary<MGTarget, string>();
         public static readonly Dictionary<MGTarget, List<string>> SystemFolders = new Dictionary<MGTarget, List<string>>
@@ -110,6 +112,12 @@ namespace MG
                 .Where(i => i.Attribute("langage").Value == "cs");
             foreach (var projectElement in csProjectsElements)
             {
+                string output = MGProject.GetOutput(projectElement);
+                bool isFiltered = Filter.FirstOrDefault(f => String.Compare(f, output, true) == 0) == null;
+                if(isFiltered)
+                {
+                    continue;
+                }
                 this.IsCompilable = true;
                 var project = this.CreateProject(projectElement);
                 this.Projects.Add(project);
@@ -207,7 +215,7 @@ namespace MG
         public void Parse(XElement projectElement)
         {
             this.Root = projectElement.Attribute("code").Value.Replace("/", "\\");
-            this.Output = GetProjectAttribute(projectElement, "output");
+            this.Output = GetOutput(projectElement);
             this.Name = Path.GetFileNameWithoutExtension(this.Output);
             this.RootNamespace = projectElement.Attribute("rootnamespace").Value;
 
@@ -217,6 +225,17 @@ namespace MG
             this.AddReferences(projectElement);
         }
 
+        private static string[] ServerRefs = new string[]
+        {
+            "System.Configuration.dll",
+            "System.Web.dll",
+            "System.Web.Services.dll",
+        };
+        private static string[] ClientRefs = new string[]
+        {
+            "System.Configuration.dll",
+            "System.Web.Services.dll",
+        };
         private void AddReferences(XElement projectElement)
         {
             var referencesElement = projectElement.Elements("references")
@@ -224,6 +243,28 @@ namespace MG
             this.References = referencesElement.Descendants("reference")
                 .Select(i => MGReference.FromReferenceElement(i))
                 .ToList();
+            AddAdditionalRefs(MGTarget.Client, ClientRefs);
+            AddAdditionalRefs(MGTarget.Server, ServerRefs);
+        }
+
+        private void AddAdditionalRefs(MGTarget target, IEnumerable<string> refs)
+        {
+            if ((OutputTarget & target) == target)
+            {
+                foreach (var sr in refs)
+                {
+                    if (this.References.Where(r => r.Type == MGReferenceType.Framework
+                        && String.Compare(r.Name, sr, true) == 0).FirstOrDefault() == null)
+                    {
+                        this.References.Add(
+                            new MGReference()
+                            {
+                                Type = MGReferenceType.Framework,
+                                Name = sr,
+                            });
+                    }
+                }
+            }
         }
 
         private void AddSources(XElement projectElement)
@@ -273,6 +314,11 @@ namespace MG
                 .Where(i => i.Attribute("nom").Value == attributeName)
                 .Single();
             return attElement.Attribute("valeur").Value;
+        }
+
+        internal static string GetOutput(XElement projectElement)
+        {
+            return GetProjectAttribute(projectElement, "output");
         }
     }
 }

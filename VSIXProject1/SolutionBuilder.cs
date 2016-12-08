@@ -27,7 +27,7 @@ namespace VSIXProject1
             {
                 //@"C:\tmp\Gizeh\N00-Redist\N00-Redist.xml",
                 //@"C:\tmp\Gizeh\N20-Lanceur\N20-Lanceur.xml",
-                @"C:\tmp\Gizeh\N01-AGL\N01-AGL.xml",
+                @"C:\tmp\Gizeh\N01-AGL\N01-AGL-NET45.xml",
             })
             {
                 this.CreateComposantSolution(composantFile);
