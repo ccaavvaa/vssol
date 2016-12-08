@@ -213,6 +213,7 @@ namespace MG
         public List<string> Sources { get; private set; }
         public List<MGReference> References { get; private set; }
         public string RootNamespace { get; private set; }
+        public string Icon { get; private set; }
 
         public void Parse(XElement projectElement)
         {
@@ -223,8 +224,15 @@ namespace MG
 
             this.SetOutputType(projectElement);
             this.SetTarget(projectElement);
+            this.SetIcon(projectElement);
             this.AddSources(projectElement);
             this.AddReferences(projectElement);
+        }
+
+        private void SetIcon(XElement projectElement)
+        {
+            string icon = GetProjectAttribute(projectElement, "win32icon");
+            this.Icon = icon;
         }
 
         private static string[] ServerRefs = new string[]
@@ -314,8 +322,9 @@ namespace MG
         {
             var attElement = projectElement.Descendants("attribut")
                 .Where(i => i.Attribute("nom").Value == attributeName)
-                .Single();
-            return attElement.Attribute("valeur").Value;
+                .FirstOrDefault();
+            
+            return attElement == null ? null : attElement.Attribute("valeur").Value;
         }
 
         internal static string GetOutput(XElement projectElement)

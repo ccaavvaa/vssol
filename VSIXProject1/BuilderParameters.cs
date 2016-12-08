@@ -213,6 +213,8 @@ namespace VSIXProject1
         public string ClientOutput { get; set; }
         public string ComposantFile { get; set; }
 
+        public string KeyFile { get; set; }
+
         public string WorkingDir { get { return Path.Combine(this.WorkingRoot, this.Composant.Name); } }
         public MGComposant Composant { get; set; }
         public void Parse()

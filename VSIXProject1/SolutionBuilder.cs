@@ -27,8 +27,8 @@ namespace VSIXProject1
             foreach (var composantFile in new string[]
             {
                 //@"C:\tmp\Gizeh\N00-Redist\N00-Redist.xml",
-                //@"C:\tmp\Gizeh\N20-Lanceur\N20-Lanceur.xml",
-                @"C:\tmp\Gizeh\N01-AGL\N01-AGL-NET45.xml",
+                @"C:\tmp\Gizeh\N20-Lanceur\N20-Lanceur.xml",
+                //@"C:\tmp\Gizeh\N01-AGL\N01-AGL-NET45.xml",
             })
             {
                 this.CreateComposantSolution(composantFile);
@@ -43,6 +43,7 @@ namespace VSIXProject1
                 WorkingRoot = @"c:\tmp\working",
                 ClientOutput = @"c:\tmp\working\Debug\Client",
                 ServerOutput = @"c:\tmp\working\Debug\Server",
+                KeyFile = @"c:\tmp\working\Key.snk",
                 ComposantFile = composantFile,
             };
 
@@ -88,8 +89,29 @@ namespace VSIXProject1
             CleanProject(project);
             AddReferences(parameters, solution, project, p);
             AddFiles(parameters, project, p);
+            SetKeyFile(parameters.KeyFile, project);
+            SetIcon(p.Icon, project);
             SetOutput(parameters, project, p);
             project.Save();
+        }
+
+        private void SetIcon(string icon, Project project)
+        {
+            if(!string.IsNullOrEmpty(icon))
+            {
+                project.Properties.Item("ApplicationIcon").Value = icon;
+            }
+        }
+
+        private void SetKeyFile(string keyFile, Project project)
+        {
+            Property projProperty = project.Properties.Item("SignAssembly");
+            bool signed = (bool)projProperty.Value;
+            if (!signed)
+            {
+                project.Properties.Item("AssemblyOriginatorKeyFile").Value = keyFile;
+                project.Properties.Item("SignAssembly").Value = true;
+            }
         }
 
         private void SetOutput(BuilderParameters parameters, Project project, MGProject mgprj)
