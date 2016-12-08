@@ -10,6 +10,7 @@ using System.Runtime.Versioning;
 using VSLangProj110;
 using System.IO;
 using MG;
+using VSLangProj140;
 
 namespace VSIXProject1
 {
@@ -68,6 +69,8 @@ namespace VSIXProject1
                 CreateProject(parameters, solution, p);
             }
             solution.Close(true);
+            System.Diagnostics.Process.Start(Path.Combine(parameters.WorkingDir, parameters.SolutionName + ".sln"));
+            _dte.Quit();
         }
 
         private void CreateProject(BuilderParameters parameters, Solution4 solution, MGProject p)
@@ -118,6 +121,24 @@ copy / y ""$(TargetDir)$(TargetName).pdb"" ""{0}""
             AddFrameworkRefs(mgprj, references);
             AddRuntimeRefs(parameters, mgprj, references);
             AddProjectRefs(solution, mgprj, references);
+            AddWebRefs(solution, mgprj, project);
+        }
+
+        private void AddWebRefs(Solution4 solution, MGProject mgprj, Project project)
+        {
+            var mgWebtRef = mgprj.References
+                .Where(r => r.Type == MGReferenceType.Web);
+            var vsproj = project.Object as VSProject;
+            foreach(var aref in mgWebtRef)
+            {
+                string url = String.Concat("http://localhost/SpoNext/",
+                    aref.Wsdl.Replace("?WSDL", String.Empty));
+                var item = vsproj.AddWebReference(url);
+                int start = url.LastIndexOf('/') + 1;
+                int end = url.IndexOf(".asmx");
+                string serviceName = url.Substring(start, end - start);
+                item.Name = String.Concat("Service", serviceName);
+            }
         }
 
         private static void AddProjectRefs(Solution4 solution, MGProject mgprj, References references)
@@ -169,10 +190,20 @@ copy / y ""$(TargetDir)$(TargetName).pdb"" ""{0}""
             }
         }
 
+        private static string[] excludeFiles = new string[]
+        {
+            @"Properties\Settings.designer.cs",
+        };
+
         private void AddFiles(BuilderParameters parameters, Project project, MGProject mgproj)
         {
             foreach (var file in mgproj.Sources)
             {
+                if (excludeFiles.FirstOrDefault(i => String.Compare(file, i, true) == 0) != null)
+                {
+                    continue;
+                }
+
                 string fileName = Path.GetFileName(file);
                 string fullName = Path.Combine(parameters.Composant.Root, mgproj.Root, file);
                 if (!File.Exists(fullName))
@@ -220,6 +251,8 @@ copy / y ""$(TargetDir)$(TargetName).pdb"" ""{0}""
                 ".xml",
                 ".csproj",
                 ".sln",
+                ".settings",
+                ".config",
             };
             var resources = dirInfo.EnumerateFiles("*", SearchOption.AllDirectories)
                 .Where(f => !excludeExtensions.Contains(f.Extension.ToLower()))
@@ -227,6 +260,10 @@ copy / y ""$(TargetDir)$(TargetName).pdb"" ""{0}""
             foreach (var file in resources)
             {
                 string fileInProjectPath = file.Substring(dirInfo.FullName.Length);
+                if (fileInProjectPath.StartsWith("Web References"))
+                {
+                    continue;
+                }
                 string projectPath = Path.GetDirectoryName(project.FileName);
                 string fileInProject = Path.Combine(projectPath, fileInProjectPath);
                 if (File.Exists(fileInProject))

@@ -109,7 +109,8 @@ namespace MG
             this.Name = composantElement.Attribute("nom").Value;
 
             var csProjectsElements = composantElement.Descendants("projet")
-                .Where(i => i.Attribute("langage").Value == "cs");
+                .Where(i => (i.Attribute("langage").Value == "cs") && 
+                (i.Attribute("actif") == null || i.Attribute("actif").Value != "false"));
             foreach (var projectElement in csProjectsElements)
             {
                 string output = MGProject.GetOutput(projectElement);
@@ -165,6 +166,7 @@ namespace MG
         public string Composant { get; set; }
         public string Name { get; set; }
         public string Version { get; set; }
+        public string Wsdl { get; private set; }
 
         public void Parse(XElement referenceElement)
         {
@@ -186,7 +188,7 @@ namespace MG
                     break;
                 case "web":
                     Type = MGReferenceType.Web;
-                    Name = referenceElement.Attribute("wsdl").Value;
+                    Wsdl = referenceElement.Attribute("wsdl").Value;
                     break;
                 default:
                     throw new NotImplementedException(String.Concat("Reference type: ", type));
