@@ -109,8 +109,8 @@ namespace MG
             this.Name = composantElement.Attribute("nom").Value;
 
             var csProjectsElements = composantElement.Descendants("projet")
-                .Where(i => (i.Attribute("langage").Value == "cs") && 
-                (i.Attribute("actif") == null || i.Attribute("actif").Value != "false"));
+                .Where(i => (i.Attribute("langage").Value == "cs"));// && 
+                //(i.Attribute("actif") == null || i.Attribute("actif").Value != "false"));
             foreach (var projectElement in csProjectsElements)
             {
                 string output = MGProject.GetOutput(projectElement);

@@ -27,8 +27,10 @@ namespace VSIXProject1
             foreach (var composantFile in new string[]
             {
                 //@"C:\tmp\Gizeh\N00-Redist\N00-Redist.xml",
-                @"C:\tmp\Gizeh\N20-Lanceur\N20-Lanceur.xml",
+                //@"C:\tmp\Gizeh\N20-Lanceur\N20-Lanceur.xml",
                 //@"C:\tmp\Gizeh\N01-AGL\N01-AGL-NET45.xml",
+                //@"C:\tmp\gizeh\N05-TableauxDeBord\N05-TableauxDeBord.xml",
+                @"C:\tmp\gizeh\N15-MoteurRegles\N15-MoteurRegles-NET45.xml",
             })
             {
                 this.CreateComposantSolution(composantFile);
@@ -69,9 +71,44 @@ namespace VSIXProject1
             {
                 CreateProject(parameters, solution, p);
             }
+            foreach(var d in Helper.GetEnumerable<BuildDependency>(solution.SolutionBuild.BuildDependencies))
+            {
+                d.RemoveAllProjects();
+            }
+            foreach (var p in parameters.Composant.Projects)
+            {
+                SetBuildDeps(solution, p);
+            }
+
             solution.Close(true);
             System.Diagnostics.Process.Start(Path.Combine(parameters.WorkingDir, parameters.SolutionName + ".sln"));
             _dte.Quit();
+        }
+
+        private void SetBuildDeps(Solution4 solution, MGProject p)
+        {
+            var bd = solution.SolutionBuild.BuildDependencies;
+            var solutionProjects = Helper.GetSolutionProjects(solution);
+            var project = solutionProjects.FirstOrDefault(i => i.Name == p.Name);
+            if(project == null)
+            {
+                return;
+            }
+            var d = Helper.GetEnumerable<BuildDependency>(bd).FirstOrDefault(i => i.Project == project);
+            if(d == null)
+            {
+                return;
+            }
+
+            foreach(var aref in p.References.Where(r=>r.Type == MGReferenceType.Project))
+            {
+                var dp = solutionProjects.FirstOrDefault(i => i.Name == Path.GetFileNameWithoutExtension(aref.Name));
+                if(dp == null)
+                {
+                    continue;
+                }
+                d.AddProject(dp.UniqueName);
+            }
         }
 
         private void CreateProject(BuilderParameters parameters, Solution4 solution, MGProject p)
@@ -92,12 +129,22 @@ namespace VSIXProject1
             SetKeyFile(parameters.KeyFile, project);
             SetIcon(p.Icon, project);
             SetOutput(parameters, project, p);
+            SetCompileNET45(project);
             project.Save();
+        }
+
+        private void SetCompileNET45(Project project)
+        {
+            string constants = Convert.ToString(
+                project.ConfigurationManager.ActiveConfiguration.Properties.Item("DefineConstants").Value
+                );
+            constants = String.Join(";", constants.Split(';').Union(new string[] { "NET45" }));
+            project.ConfigurationManager.ActiveConfiguration.Properties.Item("DefineConstants").Value = constants;
         }
 
         private void SetIcon(string icon, Project project)
         {
-            if(!string.IsNullOrEmpty(icon))
+            if (!string.IsNullOrEmpty(icon))
             {
                 project.Properties.Item("ApplicationIcon").Value = icon;
             }
@@ -139,7 +186,8 @@ copy / y ""$(TargetDir)$(TargetName).pdb"" ""{0}""
 
         private void AddReferences(BuilderParameters parameters, Solution4 solution, Project project, MGProject mgprj)
         {
-            var references = (project.Object as VSProject).References;
+            var vsProject = project.Object as VSProject;
+            var references = vsProject.References;
             AddFrameworkRefs(mgprj, references);
             AddRuntimeRefs(parameters, mgprj, references);
             AddProjectRefs(solution, mgprj, references);
@@ -151,7 +199,7 @@ copy / y ""$(TargetDir)$(TargetName).pdb"" ""{0}""
             var mgWebtRef = mgprj.References
                 .Where(r => r.Type == MGReferenceType.Web);
             var vsproj = project.Object as VSProject;
-            foreach(var aref in mgWebtRef)
+            foreach (var aref in mgWebtRef)
             {
                 string url = String.Concat("http://localhost/SpoNext/",
                     aref.Wsdl.Replace("?WSDL", String.Empty));
@@ -171,7 +219,7 @@ copy / y ""$(TargetDir)$(TargetName).pdb"" ""{0}""
             {
                 var projectName = Path.GetFileNameWithoutExtension(aref.Name);
                 var refprj = Helper.GetEnumerable<Project>(solution.Projects)
-                    .FirstOrDefault(i => String.Compare(i.Name, projectName, StringComparison.InvariantCultureIgnoreCase) == 0);
+                    .FirstOrDefault(i => String.Compare(i.Name, projectName, true) == 0);
                 if (refprj == null)
                 {
                     throw new InvalidOperationException(String.Format("Project {0} not found", projectName));
@@ -320,9 +368,17 @@ copy / y ""$(TargetDir)$(TargetName).pdb"" ""{0}""
             return items;
         }
 
+        private static string[] SpecialVersion2 = new string[]
+        {
+            //"MGDIS.N20.Common",
+            //"AglNETCommon",
+        };
         private static void SetTargetFramework(Project project)
         {
-            project.Properties.Item("TargetFrameworkMoniker").Value = new FrameworkName(".NETFramework", new Version(4, 6)).FullName;
+            Version v = SpecialVersion2.FirstOrDefault(p => String.Compare(project.Name, p, true) == 0) != null ?
+                new Version(2, 0) : new Version(4, 5);
+
+            project.Properties.Item("TargetFrameworkMoniker").Value = new FrameworkName(".NETFramework", v).FullName;
         }
 
         //_dte.Solution.Close(true);
