@@ -240,6 +240,7 @@ namespace MG
             "System.Configuration.dll",
             "System.Web.dll",
             "System.Web.Services.dll",
+            "System.Xml.dll"
         };
         private static string[] ClientRefs = new string[]
         {
